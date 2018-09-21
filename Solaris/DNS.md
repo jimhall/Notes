@@ -220,13 +220,13 @@ svc:/network/dns/server:default> setprop start/group = dns
 svc:/network/dns/server:default> exit
 ```
 
-	* Create a directory for a new process ID file.
+* Create a directory for a new process ID file.
 
 ```
 root@odin:~# mkdir -p /var/named/tmp
 root@odin:~# chown dnsadmin:dns /var/named/tmp
 ```
-	* Create an initial named.conf
+* Create an initial named.conf
 
 ```bash
 dnsconf@odin:~/dnswork$ cat named.conf
