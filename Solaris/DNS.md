@@ -21,7 +21,7 @@ Some key points to the install and configuration:
 Since an "exact-install" was done with pkg:/group/system/solaris-small-server DNS bind packages are not installed. How to determine:
 
 ```bash
-jhall@s114:~$ pkg search pkg:/service/network/dns/bind
+backdoor@s114:~$ pkg search pkg:/service/network/dns/bind
 INDEX       ACTION VALUE                                               PACKAGE
 group       depend service/network/dns/bind                            pkg:/group/system/solaris-large-server@11.4-11.4.0.0.1.10.0
 incorporate depend service/network/dns/bind@9.10.6.1.0-11.4.0.0.1.10.0 pkg:/consolidation/userland/userland-incorporation@11.4-11.4.0.0.1.10.0
@@ -35,7 +35,7 @@ pkg.fmri    set    solaris/service/network/dns/bind                    pkg:/serv
 Here is a way to check what is in the bind package contents:
 
 ```bash
-jhall@s114:~$ pkg contents -r pkg:/service/network/dns/bind
+backdoor@s114:~$ pkg contents -r pkg:/service/network/dns/bind
 PATH
 lib/svc/manifest/network/dns/server.xml
 lib/svc/method/dns-server
@@ -52,8 +52,8 @@ usr/sbin/tsig-keygen
 Here is the pkg dry run:
 
 ```bash
-jhall@s114:~$ pfexec pkg install -nv pkg:/service/network/dns/bind
-Re-authentication by jhall is required to use profile:
+backdoor@s114:~$ pfexec pkg install -nv pkg:/service/network/dns/bind
+Re-authentication by backdoor is required to use profile:
         Software Installation
 (Use ^C to cancel)
 Password: 
@@ -92,7 +92,7 @@ Planning linked: 2/2 done
 Here is the real installation (the -r switch is to do the install in the solaris branded non-global zones):
 
 ```bash
-jhall@s114:~$ pfexec pkg install -r pkg:/service/network/dns/bind
+backdoor@s114:~$ pfexec pkg install -r pkg:/service/network/dns/bind
            Packages to install:  1
             Services to change:  1
        Create boot environment: No
@@ -125,7 +125,7 @@ Executing linked: 0/2 done; 1 working: zone:thor
 Executing linked: 1/2 done; 1 working: zone:odin
 Executing linked: 2/2 done
 Updating package cache                           1/1 
-jhall@s114:~$ 
+backdoor@s114:~$ 
 ```
 
 ## Add Role Accounts for DNS management [1]
@@ -159,7 +159,7 @@ set never_audit=no
 root@odin:~/dnswork# profiles -p "DNS Service Management" -f DNS-Service-Management.profile
 root@odin:~/dnswork# profiles -p "DNS Configuration Management" -f DNS-Configuration-Management.profile
 ```
-### Confirmation that the work has completed as expected.
+#### Confirmation that the work has completed as expected.
 
 ```bash
 root@odin:~/dnswork# profiles -p "DNS Service Management" export
@@ -178,30 +178,30 @@ set never_audit=no
 
 2. Now create the two roles. This could optionally be consolidated into one role, and the two Rights Profiles above could be directly assinged to a user. These steps are a twist on "How to Run the DNS Service as an Alternative User" [2]. 
 
-### First create a group:
+#### First create a group:
 ```bash
 /usr/sbin/groupadd -g 1000 dns
 ```
 
-### Then create the two role accounts. Note the use of -K roleauth=user which allows a user to authenticate with their own password (rather than the default shared password for Solaris roles). 
+#### Then create the two role accounts. Note the use of -K roleauth=user which allows a user to authenticate with their own password (rather than the default shared password for Solaris roles). 
 
 ```bash
 roleadd -c "DNS Administrator Start Stop Role" -d localhost:/export/home/dnsadmin -u 1000 -g dns -m -k /etc/skel -K roleauth=user -P +"DNS Service Management" -s /usr/bin/pfbash dnsadmin
 
 roleadd -c "DNS Configuration File Role" -d localhost:/export/home/dnsconf -u 1001 -g dns -m -k /etc/skel -K roleauth=user -P +"DNS Configuration Management" -s /usr/bin/pfbash dnsconf
 ```
-### Then lock the role account's password since the account allows for authentication via the user's password (see -K roleauth=user).
+#### Then lock the role account's password since the account allows for authentication via the user's password (see -K roleauth=user).
 ```bash
 passwd -N dnsadmin
 passwd -N dnsconf
 ```
 
-### Now add the role to the user so the account can su(1M) and gain access to the role account.
+#### Now add the role to the user so the account can su(1M) and gain access to the role account.
 
 ```bash
 usermod -R +dnsadmin,dnsconf backdoor
 ```
-### Validate work regarding role assiginment.
+#### Validate work regarding role assiginment.
 
 ```bash
 backdoor@odin:~$ roles
@@ -213,7 +213,7 @@ dnsconf   NL
 3. Begin some of the key DNS work [2]
 
 	* Set service properties for the user.
-```bash
+```
 root@odin:~# svccfg -s dns/server:default
 svc:/network/dns/server:default> setprop start/user = dnsadmin
 svc:/network/dns/server:default> setprop start/group = dns
@@ -222,7 +222,7 @@ svc:/network/dns/server:default> exit
 
 	* Create a directory for a new process ID file.
 
-```bash
+```
 root@odin:~# mkdir -p /var/named/tmp
 root@odin:~# chown dnsadmin:dns /var/named/tmp
 ```
