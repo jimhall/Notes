@@ -20,7 +20,7 @@ Some key points to the install and configuration:
 
 Since an "exact-install" was done with pkg:/group/system/solaris-small-server DNS bind packages are not installed. How to determine:
 
-```bash
+```
 backdoor@s114:~$ pkg search pkg:/service/network/dns/bind
 INDEX       ACTION VALUE                                               PACKAGE
 group       depend service/network/dns/bind                            pkg:/group/system/solaris-large-server@11.4-11.4.0.0.1.10.0
@@ -34,7 +34,7 @@ pkg.fmri    set    solaris/service/network/dns/bind                    pkg:/serv
 ```
 Here is a way to check what is in the bind package contents:
 
-```bash
+```
 backdoor@s114:~$ pkg contents -r pkg:/service/network/dns/bind
 PATH
 lib/svc/manifest/network/dns/server.xml
@@ -51,7 +51,7 @@ usr/sbin/tsig-keygen
 
 Here is the pkg dry run:
 
-```bash
+```
 backdoor@s114:~$ pfexec pkg install -nv pkg:/service/network/dns/bind
 Re-authentication by backdoor is required to use profile:
         Software Installation
@@ -91,7 +91,7 @@ Planning linked: 2/2 done
 ```
 Here is the real installation (the -r switch is to do the install in the solaris branded non-global zones):
 
-```bash
+```
 backdoor@s114:~$ pfexec pkg install -r pkg:/service/network/dns/bind
            Packages to install:  1
             Services to change:  1
@@ -130,13 +130,13 @@ backdoor@s114:~$
 
 ## Add Role Accounts for DNS management [1]
 
-Zone odin will be the DNS primary and zone thor will be the secondary. Since these zones will eventually be the LDAP servers I am going to create local roles for these services. There is a  a slight modification from the documented procedure and a dedicated role account is created to start/stop services rather than give the authorization directly to an end user. We then assign the role to end users (eg. backdoor).
+Zone odin will be the DNS primary and zone thor will be the secondary. Since these zones will eventually be the LDAP servers I am going to create local roles for these services. There is a  a slight modification from the documented procedure and a dedicated role account is created to start/stop services rather than give the authorization directly to an end user. We then assign the role to end users (eg. backdoor). A second role is created to modify DNS configuration files and assigned to the backdoor account.
 
 The DNS domain name will be norsestuff.com (a nonsense domain name) on a private network 192.168.1.0/24.
 
 1. First create the Rights Profiles: One for DNS config file management and one for DNS start/stop. Note that auditing is applied in each profile to keep the amount of additional auditing to a minimum. The DNS Coniguration Management profile uses the solaris.admin.edit authorization so that diff style output is captured in the audit trail for each of the DNS configuration files in the profile. Text fragments for the profiles are created off the root home directory called dnswork and then imported using the profiles(1) command -f option/switch:
 
-```bash
+```
 root@odin:~/dnswork# more *.pro*
 ::::::::::::::
 DNS-Configuration-Management.profile
@@ -179,31 +179,31 @@ set never_audit=no
 2. Now create the two roles. This could optionally be consolidated into one role, and the two Rights Profiles above could be directly assinged to a user. These steps are a twist on "How to Run the DNS Service as an Alternative User" [2]. 
 
 #### First create a group:
-```bash
+```
 /usr/sbin/groupadd -g 1000 dns
 ```
 
 #### Then create the two role accounts. Note the use of -K roleauth=user which allows a user to authenticate with their own password (rather than the default shared password for Solaris roles). 
 
-```bash
+```
 roleadd -c "DNS Administrator Start Stop Role" -d localhost:/export/home/dnsadmin -u 1000 -g dns -m -k /etc/skel -K roleauth=user -P +"DNS Service Management" -s /usr/bin/pfbash dnsadmin
 
 roleadd -c "DNS Configuration File Role" -d localhost:/export/home/dnsconf -u 1001 -g dns -m -k /etc/skel -K roleauth=user -P +"DNS Configuration Management" -s /usr/bin/pfbash dnsconf
 ```
 #### Then lock the role account's password since the account allows for authentication via the user's password (see -K roleauth=user).
-```bash
+```
 passwd -N dnsadmin
 passwd -N dnsconf
 ```
 
 #### Now add the role to the user so the account can su(1M) and gain access to the role account.
 
-```bash
+```
 usermod -R +dnsadmin,dnsconf backdoor
 ```
 #### Validate work regarding role assiginment.
 
-```bash
+```
 backdoor@odin:~$ roles
 dnsadmin,dnsconf,root
 root@odin:~# passwd -as | grep dns
@@ -212,7 +212,7 @@ dnsconf   NL
 ```
 3. Begin some of the key DNS work [2]
 
-	* Set service properties for the user.
+	* Set service properties for DNS start/stop. Use the role account created.
 ```
 root@odin:~# svccfg -s dns/server:default
 svc:/network/dns/server:default> setprop start/user = dnsadmin
@@ -220,7 +220,7 @@ svc:/network/dns/server:default> setprop start/group = dns
 svc:/network/dns/server:default> exit
 ```
 
-* Create a directory for a new process ID file.
+* Create a directory for a new process ID file. Allow the dnsadmin account to write to the directory.
 
 ```
 root@odin:~# mkdir -p /var/named/tmp
@@ -228,15 +228,15 @@ root@odin:~# chown dnsadmin:dns /var/named/tmp
 ```
 * Create an initial named.conf
 
-```bash
+```
 dnsconf@odin:~/dnswork$ cat named.conf
 options {
 directory "/var/named";
 pid-file "/var/named/tmp/named.pid";
 };
 ```
-	* Use the dnsconf role to create and edit the file
-```bash
+* Use the dnsconf role to create and edit the file
+```
 backdoor@odin:~$ roles
 dnsadmin,dnsconf,root
 backdoor@odin:~$ su - dnsconf   ### use backdoor's password
@@ -245,7 +245,7 @@ Oracle Corporation      SunOS 5.11      Solaris_11/11.4/ON/production.build-11.4
 dnsconf@odin:~/dnswork$ pfedit /etc/named.conf
 pfedit: /etc/named.conf has been created.
 ```
-	* Start the DNS SMF service
+* Start the DNS SMF service
 ```
 dnsadmin@odin:~$ svcadm enable svc:/network/dns/server:default
 dnsadmin@odin:~$ svcs -l svc:/network/dns/server:default
@@ -273,6 +273,7 @@ backdoor@odin:~$ su - dnsadmin ### use backdoor's password
 Password: 
 Oracle Corporation      SunOS 5.11      Solaris_11/11.4/ON/production.build-11.4-29:2018-06-26  June 2018
 dnsadmin@odin:~$
+```
 
 4. In parallel, the steps to monitor the resulting audit activity.
 
@@ -283,26 +284,26 @@ dnsadmin@odin:~$
 		* A logout of dsnconf is done and and a su(8) to dnsadmin is done. 
 		* Then the svc:/network/dns/server:default is started via SMF using the "DNS Service Management" profile. 
 
-	* In the global zone cd(1) to /var/audit and choose the appropriate audit file. For example:
+* In the global zone cd(1) to /var/audit and choose the appropriate audit file. For example:
 
-```bash
+```
 tail -0f 20180915140628.not_terminated.s114 | praudit
 ```
 
-	* Here are the events that were generated by the steps to create the /etc/named.conf and start the DNS service. First the login by the backdoor account:
+* Here are the events that were generated by the steps to create the /etc/named.conf and start the DNS service. First the login by the backdoor account:
 
 ```
 header,85,2,login - ssh,,s114,2018-09-20 12:56:08.483-04:00
 subject,backdoor,backdoor,staff,backdoor,staff,6220,2453822926,44394 22 s114
 return,success,0
 ```
-	* Then the su(8) to dnsconf:
+* Then the su(8) to dnsconf:
 ```
 header,85,2,role login,,s114,2018-09-20 12:57:10.265-04:00
 subject,backdoor,1001,1000,1001,1000,6230,2453822926,171 3 s114
 return,success,0
 ```
-	* Then the diff(1) audit record created by pfedit(8) for the creation of /etc/named.conf:
+* Then the diff(1) audit record created by pfedit(8) for the creation of /etc/named.conf:
 ```
 header,365,2,create administrative file,,s114,2018-09-20 12:58:29.136-04:00
 subject,backdoor,root,1000,1001,1000,6240,2453822926,171 3 s114
@@ -318,14 +319,14 @@ text,--- /etc/named.conf        2018-09-20 12:58:14.400878006 -0400
      
 return,success,0
 ```
-	* The logout of dnsconf:
+* The logout of dnsconf:
 ```
 header,85,2,role logout,,s114,2018-09-20 13:14:01.092-04:00
 subject,backdoor,1001,1000,1001,1000,6230,2453822926,171 3 s114
 return,success,0
 ```
 
-	* The su(8) to dnsadmin:
+* The su(8) to dnsadmin:
 
 ```
 header,85,2,role login,,s114,2018-09-20 13:31:07.209-04:00
@@ -333,7 +334,7 @@ subject,backdoor,1000,1000,1000,1000,6296,2453822926,171 3 s114
 return,success,0
 ```
 
-	* Enabling the DNS service via SMF svcadm(8)
+* Enabling the DNS service via SMF svcadm(8)
 
 ```
 header,203,2,change service instance property,,s114,2018-09-20 13:41:00.799-04:00
@@ -367,74 +368,17 @@ return,success,0
 5. Now create a more complete DNS configuration so that named controls the norsestuff.com domain.
 
 	* Create necessary sub-directories under /var/named:
-```bash
+```
 root@odin:/var/named# mkdir master dump stats
-root@odin:/var/named# chown dnsadmin:dns *
+root@odin:/var/named# chown root:root dump master stats
 root@odin:/var/named# ls -l
 total 12
-drwxr-xr-x   2 dnsadmin dns            2 Sep 20 14:34 dump
-drwxr-xr-x   2 dnsadmin dns            2 Sep 20 14:34 master
-drwxr-xr-x   2 dnsadmin dns            2 Sep 20 14:34 stats
-drwxr-xr-x   2 dnsadmin dns            3 Sep 20 13:41 tmp
+drwxr-xr-x   2 root     root           2 Sep 20 14:34 dump
+drwxr-xr-x   2 root     root           6 Sep 20 15:10 master
+drwxr-xr-x   2 root     root           2 Sep 20 14:34 stats
+drwxr-xr-x   2 dnsadmin dns            2 Sep 24 09:38 tmp
 ```
-	* pfedit(8) /etc/named.conf
-
-```
-header,1254,2,edit administrative file,,s114,2018-09-20 15:01:12.585-04:00
-subject,backdoor,root,1000,1001,1000,6428,2453822926,171 3 s114
-path,/etc/named.conf
-use of authorization,solaris.admin.edit/etc/named.conf
-text,--- /etc/named.conf        2018-09-20 12:58:29.118152703 -0400
-     +++ /etc/named.conf.pfedit.6DVBUb  2018-09-20 15:01:12.567433072 -0400
-     @@ -1,4 +1,37 @@
-      options {
-     -directory "/var/named";
-     -pid-file "/var/named/tmp/named.pid";
-     +        directory "/var/named";
-     +        pid-file "/var/named/tmp/named.pid";
-     +        dump-file       "/var/named/dump/named_dump.db";
-     +        statistics-file "/var/named/stats/named.stats";
-     +        forwarders { 192.168.1.1; };
-     +};
-     +
-     +
-     +// zone clause - master for example.com
-     +zone "norsestuff.com" in{
-     +  type master;
-     +  file "master/master.norsestuff.com";
-     +  allow-update {none;};
-     +};
-     +// required local host domain
-     +zone "localhost" in{
-     +  type master;
-     +  file "master/master.localhost";
-     +  allow-update {none;};
-     +};
-     +
-     +// REVERSE LOOK-UPS
-     +
-     +// localhost reverse map
-     +zone "0.0.127.IN-ADDR.ARPA" in{
-     +  type master;
-     +  file "master/localhost.rev";
-     +  allow-update{none;}; // optional
-     +};
-     +// reverse map for local addresses at example.com
-     +// uses 10.146.44.0 for illustration
-     +zone "1.168.192.IN-ADDR.ARPA" in{
-     +  type master;
-     +  file "192.168.1.rev";
-     +  allow-update {none;};
-      };
-     
-return,success,0
-```
-	* Create (using pfedit) the following files:
-
-		* /var/named/master/192.168.1.rev (reverse lookups)
-		* /var/named/master/localhost.rev (localhost reverse lookup)
-		* /var/named/master/master.localhost
-		* /var/named/master/master.norsestuff.com
+* pfedit(8) /etc/named.conf
 
 ```
 header,1254,2,edit administrative file,,s114,2018-09-20 15:01:12.585-04:00
@@ -485,9 +429,63 @@ text,--- /etc/named.conf        2018-09-20 12:58:29.118152703 -0400
       };
      
 return,success,0
+```
+* Create (using pfedit) the following files:
 
+	* /var/named/master/192.168.1.rev (reverse lookups)
+	* /var/named/master/localhost.rev (localhost reverse lookup)
+	* /var/named/master/master.localhost
+	* /var/named/master/master.norsestuff.com
 
-
+```
+header,1254,2,edit administrative file,,s114,2018-09-20 15:01:12.585-04:00
+subject,backdoor,root,1000,1001,1000,6428,2453822926,171 3 s114
+path,/etc/named.conf
+use of authorization,solaris.admin.edit/etc/named.conf
+text,--- /etc/named.conf        2018-09-20 12:58:29.118152703 -0400
+     +++ /etc/named.conf.pfedit.6DVBUb  2018-09-20 15:01:12.567433072 -0400
+     @@ -1,4 +1,37 @@
+      options {
+     -directory "/var/named";
+     -pid-file "/var/named/tmp/named.pid";
+     +        directory "/var/named";
+     +        pid-file "/var/named/tmp/named.pid";
+     +        dump-file       "/var/named/dump/named_dump.db";
+     +        statistics-file "/var/named/stats/named.stats";
+     +        forwarders { 192.168.1.1; };
+     +};
+     +
+     +
+     +// zone clause - master for example.com
+     +zone "norsestuff.com" in{
+     +  type master;
+     +  file "master/master.norsestuff.com";
+     +  allow-update {none;};
+     +};
+     +// required local host domain
+     +zone "localhost" in{
+     +  type master;
+     +  file "master/master.localhost";
+     +  allow-update {none;};
+     +};
+     +
+     +// REVERSE LOOK-UPS
+     +
+     +// localhost reverse map
+     +zone "0.0.127.IN-ADDR.ARPA" in{
+     +  type master;
+     +  file "master/localhost.rev";
+     +  allow-update{none;}; // optional
+     +};
+     +// reverse map for local addresses at example.com
+     +// uses 10.146.44.0 for illustration
+     +zone "1.168.192.IN-ADDR.ARPA" in{
+     +  type master;
+     +  file "192.168.1.rev";
+     +  allow-update {none;};
+      };
+     
+return,success,0
 
 
 header,1229,2,create administrative file,,s114,2018-09-20 15:06:58.912-04:00
