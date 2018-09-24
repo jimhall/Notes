@@ -4,7 +4,7 @@
 
 # Overview
 
-This is a cookbook to install and configure DNS bind on a Solaris 11.4 system that leverages some of the security enhancements available over time in Solaris 11 -> 11.4. All this work was performed with VirtualBox.
+This is a cookbook to install and configure DNS bind on a Solaris 11.4 system that leverages some of the security enhancements available over time in Solaris 11 -> 11.4. All this work was performed with VirtualBox. The document leverages the steps to use bind authorizations and slightly modifies those steps to create profiles that are assigned to roles rather than direct authorization assignment to a user.
 
 Some key points to the install and configuration:
 
@@ -12,7 +12,7 @@ Some key points to the install and configuration:
 * It leverages Solaris zones to create multiple virtualized environemnts and to confirm network connectivity between the DNS client and servers
 * Solaris Rights management is used  
 	* Profiles are created for DNS Start/Stop and DNS Configuration Management
-	* Role accounts are created for each profile is assigned to the appropriate role
+	* Role accounts are created for each profile 
 	* Solaris Audit is configured to log only when the profile is being used. Configuration file changes are audited using the Solaris Audit pfedit(1M) command.
 * This is a simple DNS setup: 192.168.1.0/24 private network and norsestuff.com (a bogus domainname) is used.
 
