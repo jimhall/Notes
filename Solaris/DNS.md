@@ -1,6 +1,6 @@
 # DNS Notes
 
-## Date last touched: _Fri Sep 21 14:01:34 EDT 2018_
+## Date last touched: _Thu Mar 21 11:02:36 EDT 2019_
 
 # Overview
 
@@ -183,10 +183,10 @@ set never_audit=no
 /usr/sbin/groupadd -g 1000 dns
 ```
 
-#### Then create the two role accounts. Note the use of -K roleauth=user which allows a user to authenticate with their own password (rather than the default shared password for Solaris roles). 
+#### Then create the two role accounts. Note the use of -K roleauth=user which allows a user to authenticate with their own password (rather than the default shared password for Solaris roles). Do not use the automounter for the account that starts/stops the dns service. I have found that sometimes there is a timing issue and this can cause the dns service to go into maintenance mode.
 
 ```
-roleadd -c "DNS Administrator Start Stop Role" -d localhost:/export/home/dnsadmin -u 1000 -g dns -m -k /etc/skel -K roleauth=user -P +"DNS Service Management" -s /usr/bin/pfbash dnsadmin
+roleadd -c "DNS Administrator Start Stop Role" -d /export/home/dnsadmin -u 1000 -g dns -m -k /etc/skel -K roleauth=user -P +"DNS Service Management" -s /usr/bin/pfbash dnsadmin
 
 roleadd -c "DNS Configuration File Role" -d localhost:/export/home/dnsconf -u 1001 -g dns -m -k /etc/skel -K roleauth=user -P +"DNS Configuration Management" -s /usr/bin/pfbash dnsconf
 ```
@@ -218,6 +218,9 @@ root@odin:~# svccfg -s dns/server:default
 svc:/network/dns/server:default> setprop start/user = dnsadmin
 svc:/network/dns/server:default> setprop start/group = dns
 svc:/network/dns/server:default> exit
+dnsadmin@odin:~$ svcadm refresh svc:/network/dns/server:default
+dnsadmin@odin:~$ svcprop dns/server:default | grep dnsadmin
+start/user astring dnsadmin
 ```
 
 * Create a directory for a new process ID file. Allow the dnsadmin account to write to the directory.
@@ -709,6 +712,20 @@ norsestuff.com.		172800	IN	NS	odin.norsestuff.com.
 ;; MSG SIZE  rcvd: 78
 ```
 
+## An Aside
+
+You can set the named debug level vi SMF property as follows (here it is set to level 1):
+
+```
+root@odin:~# svccfg -s dns/server:default listprop | grep debug
+options/debug_level                  integer     0
+root@odin:~# svccfg -s dns/server:default
+svc:/network/dns/server:default> setprop options/debug_level = 1
+svc:/network/dns/server:default> exit
+root@odin:~# svccfg -s dns/server:default refresh
+root@odin:~# svccfg -s dns/server:default listprop | grep debug
+options/debug_level                  integer     1
+```
 
 ## Resources
 
