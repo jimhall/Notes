@@ -16,6 +16,21 @@ Some key points to the install and configuration:
 	* Solaris Audit is configured to log only when the profile is being used. Configuration file changes are audited using the Solaris Audit pfedit(1M) command.
 * This is a simple DNS setup: 192.168.1.0/24 private network and norsestuff.com (a bogus domainname) is used.
 
+## Solaris Zone Configuration of the DNS primary 
+
+Since there are multiple zones on the same host and DNS is such a high priority service for other services, the zone is configured to autoboot and given a high boot-priority when the zones are started up on the host. (See: https://blogs.oracle.com/solaris/zones-delegated-restarter-and-smf-goals) The zone configuration for odin is as follows:
+
+```
+root@s114:~# zonecfg -z odin export
+create -b
+set brand=solaris
+set autoboot=true
+set boot-priority=high
+add anet
+set linkname=net0
+set configure-allowed-address=true
+end
+```
 ## Proper software installation
 
 Since an "exact-install" was done with pkg:/group/system/solaris-small-server DNS bind packages are not installed. How to determine:
@@ -484,7 +499,7 @@ text,--- /etc/named.conf        2018-09-20 12:58:29.118152703 -0400
      +// uses 10.146.44.0 for illustration
      +zone "1.168.192.IN-ADDR.ARPA" in{
      +  type master;
-     +  file "192.168.1.rev";
+     +  file "master/192.168.1.rev";
      +  allow-update {none;};
       };
      
@@ -683,7 +698,6 @@ svc:/system/name-service/switch:default> quit
 root@thor:~# svcadm enable network/dns/client
 root@thor:~# svcadm enable system/name-service/switch
 root@thor:~# ping odin
-root@thor:~# ping odin
 odin is alive
 root@thor:~# ping odin.norsestuff.com
 odin.norsestuff.com is alive
@@ -710,6 +724,18 @@ norsestuff.com.		172800	IN	NS	odin.norsestuff.com.
 ;; SERVER: 192.168.1.31#53(192.168.1.31)
 ;; WHEN: Thu Sep 20 15:55:39 EDT 2018
 ;; MSG SIZE  rcvd: 78
+
+backdoor@thor:~$ nslookup 192.168.1.31
+Server:         192.168.1.31
+Address:        192.168.1.31#53
+
+31.1.168.192.IN-ADDR.ARPA       name = odin.norsestuff.com.
+
+backdoor@thor:~$ nslookup 127.0.0.1
+Server:         192.168.1.31
+Address:        192.168.1.31#53
+
+1.0.0.127.IN-ADDR.ARPA  name = localhost.
 ```
 
 ## An Aside
